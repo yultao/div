@@ -61,7 +61,7 @@ function App() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex justify-center items-start mt-10">
       {/* Header */}
       <div className="flex items-center gap-4">
         <select
@@ -101,8 +101,8 @@ function App() {
           page={page - 1} // DataGrid uses 0-based pages
           pageSize={pageSize}
           paginationMode="server"
-          onPageChange={(newPage) => setPage(newPage + 1)}
-          onPageSizeChange={(newSize) => {
+          onPageChange={(newPage: number) => setPage(newPage + 1)}
+          onPageSizeChange={(newSize: number) => {
             setPageSize(newSize);
             setPage(1);
           }}
