@@ -25,7 +25,13 @@ function App() {
 
   const fetchData = async () => {
     try {
-      const url = `https://jsonplaceholder.typicode.com/${option1}?_page=${page}&_limit=${pageSize}`;
+      //option 1 cors issue only happens when requesting from browser to another server in a different origin
+      //browser     ->      real server in another origin
+      //    (CORS issue)
+      //broswer     ->      vite server       ->          real server in another origin
+      //   (no cors issue same origin)  (no cors issue, becuase server to server)
+
+      const url = `/apiproxy/${option1}?_page=${page}&_limit=${pageSize}`;
       const response = await fetch(url, {
         headers: {
           "Content-Type": "application/json",
