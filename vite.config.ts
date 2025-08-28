@@ -10,7 +10,7 @@ export default defineConfig({
       "/apiproxy": {
         target: "https://jsonplaceholder.typicode.com",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
+        rewrite: (path) => path.replace(/^\/apiproxy/, ""),
       },
     },
   },
