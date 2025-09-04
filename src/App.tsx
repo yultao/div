@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { DataGrid } from "@mui/x-data-grid";
 import type { GridColDef } from "@mui/x-data-grid";
+import { Graphite } from "graphite";
+import "./App.css"
+import "graphite/dist/graphite.css";
 import {
   FirstPage as FirstPageIcon,
   LastPage as LastPageIcon,
@@ -13,7 +16,109 @@ type DataItem = {
   name?: string;
   email?: string;
 };
+function convertDataToER(jsonObj: Record<string, any>): { type: string; nodes: Array<{ id: string; name: string; type: string; description: string }>; edges: Array<{ source: string; target: string; weight: string }> } {
+    const result: {
+        type: string;
+        nodes: Array<{ id: string; name: string; type: string; description: string }>;
+        edges: Array<{ source: string; target: string; weight: string }>;
+    } = { type: "er", nodes: [], edges: [] };
 
+    function makeNode(entity: string, entityId: string, key: string, type: string, description: string) {
+        result.nodes.push({
+            id: `${entity}.${entityId}.${key}`,
+            name: key,
+            type,
+            description
+        });
+    }
+
+    function processEntity(entity: string, entityId: string, obj: Record<string, any>) {
+        const separateNodeForArray = true;
+        for (const [key, value] of Object.entries(obj)) {
+            if (value === null || value === undefined) continue;
+
+            if (typeof value !== "object" || (Array.isArray(value) === false && typeof value !== "object")) {
+                // primitive field
+                makeNode(entity, entityId, key, typeof value, String(value));
+            } else if (Array.isArray(value)) {
+                // array of objects
+                makeNode(entity, entityId, key, `[${key}]`, "[{...}]");
+
+                if (separateNodeForArray) {
+                    // create an edge from parent entity to the array field
+                    let linkedToArray = false;
+                    value.forEach((item, idx) => {
+                        const childEntity = key.toUpperCase(); // e.g. addresses -> ADDRESS
+                        const childId = item.id || `${childEntity}${idx + 1}`;
+
+                        makeNode(`[${childEntity}]`, entityId, childId, `[${childId}]`, "[{...}]");
+
+                        // PARENT -> ARRAY
+                        if (!linkedToArray) {
+                            result.edges.push({
+                                source: `${entity}.${entityId}.${key}`,
+                                target: `[${childEntity}].${entityId}.${childId}`,
+                                weight: "has"
+                            });
+                            linkedToArray = true;
+                        }
+                    });
+                }
+
+                // each item in the array is a separate entity
+                value.forEach((item, idx) => {
+                    const childEntity = key.toUpperCase(); // e.g. addresses -> ADDRESS
+                    const childId = item.id || `${childEntity}${idx + 1}`;
+
+                    if (separateNodeForArray) {
+                        // ARRAY -> ITEM
+                        result.edges.push({
+                            source: `[${childEntity}].${entityId}.${childId}`,
+                            target: `${childEntity}.${childId}.id`,
+                            weight: "contains"
+                        });
+                        processEntity(childEntity, childId, item);
+                    } else {
+                        result.edges.push({
+                            source: `${entity}.${entityId}.${key}`,
+                            target: `${childEntity}.${childId}.id`,
+                            weight: "has"
+                        });
+                        processEntity(`[${childEntity}]`, childId, item);
+                    }
+                });
+            } else {
+                // nested object
+                makeNode(entity, entityId, key, key[0].toUpperCase() + key.slice(1), "{...}");
+
+                const childEntity = key.toUpperCase();
+                const childId = value.id || `${childEntity}001`;
+                result.edges.push({
+                    source: `${entity}.${entityId}.${key}`,
+                    target: `${childEntity}.${childId}.id`,
+                    weight: "has"
+                });
+                processEntity(childEntity, childId, value);
+            }
+        }
+    }
+
+    // entry point: assume root objects are entities
+    for (const [rootKey, rootVal] of Object.entries(jsonObj)) {
+        const entity = rootKey.toUpperCase().replace(/s$/, ""); // plural -> singular
+        if (Array.isArray(rootVal)) {
+            rootVal.forEach((item, idx) => {
+                const entityId = item.id || `${entity}${idx + 1}`;
+                processEntity(entity, entityId, item);
+            });
+        } else if (typeof rootVal === "object") {
+            const entityId = rootVal.id || `${entity}001`;
+            processEntity(entity, entityId, rootVal);
+        }
+    }
+
+    return result;
+}
 function App() {
   const [option1, setOption1] = useState("users");
   const [option2, setOption2] = useState("all");
@@ -54,7 +159,7 @@ function App() {
   };
 
   useEffect(() => {
-    fetchData();
+    // fetchData();
   }, [page, option1, option2, pageSize]);
 
   const totalPages = Math.ceil(total / pageSize);
@@ -66,10 +171,107 @@ function App() {
     { field: "email", headerName: "Email", width: 250, flex: 1 },
   ];
 
+
+  const json = `
+{
+  "user": {
+    "id": "USR001",
+    "addresses": [
+      {
+        "type": "home",
+        "street": "123 Main St",
+        "city": "Anytown",
+        "zipCode": "12345"
+      },
+      {
+        "type": "work",
+        "street": "456 Business Ave",
+        "city": "Metropolis",
+        "zipCode": "67890"
+      }
+    ],
+    "preferences": {
+      "newsletter": true,
+      "notifications": {
+        "email": true,
+        "sms": false
+      }
+    },
+    "orderHistory": [
+      {
+        "orderId": "ORD001",
+        "date": "2025-08-15",
+        "items": [
+          {
+            "id": "ITEM001",
+            "productId": "PROD001",
+            "name": "Laptop",
+            "quantity": 1,
+            "price": 1200
+          },
+          {
+            "id": "ITEM002",
+            "productId": "PROD003",
+            "name": "Mouse",
+            "quantity": 2,
+            "price": 25
+          }
+        ],
+        "totalAmount": 1250
+      },
+      {
+        "orderId": "ORD002",
+        "date": "2025-09-01",
+        "items": [
+          {
+            "id": "ITEM003",
+            "productId": "PROD005",
+            "name": "Keyboard",
+            "quantity": 1,
+            "price": 75
+          }
+        ],
+        "totalAmount": 75
+      }
+    ]
+    
+  }
+}
+`;
+  /*
+  
+  */
+  const jsonData = JSON.stringify(convertDataToER(JSON.parse(json)))
+  console.log(jsonData);
+  const jsonData2 = `
+  {
+        "type": "er",
+        "nodes": [
+          {"id":"ACCOUNTS.User.id","name":"id","type":"ID3","description":"ACCOUNTS"},
+          {"id":"ACCOUNTS.User.name","name":"name","type":"String","description":"ACCOUNTS"},
+          {"id":"ACCOUNTS.User.reviews","name":"reviews","type":"[Review]","description":"REVIEWS"},
+          {"id":"ACCOUNTS.User.username","name":"username","type":"String","description":"ACCOUNTS"},
+          {"id":"PRODUCTS.Product.inStock","name":"inStock","type":"Boolean","description":"INVENTORY"},
+          {"id":"PRODUCTS.Product.name","name":"name","type":"String","description":"PRODUCTS"},
+          {"id":"PRODUCTS.Product.price","name":"price","type":"Int","description":"PRODUCTS"},
+          {"id":"PRODUCTS.Product.reviews","name":"reviews","type":"[Review]","description":"REVIEWS"},
+          {"id":"PRODUCTS.Product.shippingEstimate","name":"shippingEstimate","type":"Int","description":"INVENTORY"},
+          {"id":"PRODUCTS.Product.upc","name":"upc","type":"String","description":"PRODUCTS"},
+          {"id":"PRODUCTS.Product.weight","name":"weight","type":"Int","description":"PRODUCTS"}
+        ],
+        "edges": [
+          { "source": "ACCOUNTS.User.reviews", "target": "REVIEWS.Review.id", "weight": "User.reviews" },
+          { "source": "PRODUCTS.Product.reviews", "target": "REVIEWS.Review.id", "weight": "Product.reviews" }
+        ]
+      }
+        `;
   return (
-    <div className="flex justify-center items-start mt-10">
-      {/* Header */}
-      <div className="flex items-center gap-4">
+    <div style={{ width: "800px", border: "10px red solid" }} className="p-10">
+
+      <Graphite jsonString={jsonData} />
+      <div className="flex justify-center items-start mt-10">
+        {/* Header */}
+        {/* <div className="flex items-center gap-4">
         <select
           value={option1}
           onChange={(e) => setOption1(e.target.value)}
@@ -96,60 +298,61 @@ function App() {
         >
           Fetch Data
         </button>
-      </div>
+      </div> */}
 
-      {/* DataGrid */}
-      <div style={{ height: 400, width: "100%" }}>
-        <DataGrid
-          rows={data}
-          columns={columns}
-          rowCount={total}
-          page={page - 1} // DataGrid uses 0-based pages
-          pageSize={pageSize}
-          paginationMode="server"
-          onPageChange={(newPage: number) => setPage(newPage + 1)}
-          onPageSizeChange={(newSize: number) => {
-            setPageSize(newSize);
-            setPage(1);
-          }}
-          rowsPerPageOptions={[5, 10, 20]}
-          pagination
-        />
-      </div>
+        {/* DataGrid */}
+        {/* <div style={{ height: 400, width: "100%" }}>
+          <DataGrid
+            rows={data}
+            columns={columns}
+            rowCount={total}
+            page={page - 1} // DataGrid uses 0-based pages
+            pageSize={pageSize}
+            paginationMode="server"
+            onPageChange={(newPage: number) => setPage(newPage + 1)}
+            onPageSizeChange={(newSize: number) => {
+              setPageSize(newSize);
+              setPage(1);
+            }}
+            rowsPerPageOptions={[5, 10, 20]}
+            pagination
+          />
+        </div> */}
 
-      {/* Custom pagination controls (optional) */}
-      <div className="flex items-center gap-2 mt-2">
-        <button
-          onClick={() => setPage(1)}
-          disabled={page === 1}
-          className="p-2 border rounded disabled:opacity-50"
-        >
-          <FirstPageIcon fontSize="small" />
-        </button>
-        <button
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          disabled={page === 1}
-          className="p-2 border rounded disabled:opacity-50"
-        >
-          <PrevIcon fontSize="small" />
-        </button>
-        <span className="px-3">
-          Page {page} of {totalPages}
-        </span>
-        <button
-          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          disabled={page === totalPages}
-          className="p-2 border rounded disabled:opacity-50"
-        >
-          <NextIcon fontSize="small" />
-        </button>
-        <button
-          onClick={() => setPage(totalPages)}
-          disabled={page === totalPages}
-          className="p-2 border rounded disabled:opacity-50"
-        >
-          <LastPageIcon fontSize="small" />
-        </button>
+        {/* Custom pagination controls (optional) */}
+        {/* <div className="flex items-center gap-2 mt-2">
+          <button
+            onClick={() => setPage(1)}
+            disabled={page === 1}
+            className="p-2 border rounded disabled:opacity-50"
+          >
+            <FirstPageIcon fontSize="small" />
+          </button>
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="p-2 border rounded disabled:opacity-50"
+          >
+            <PrevIcon fontSize="small" />
+          </button>
+          <span className="px-3">
+            Page {page} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="p-2 border rounded disabled:opacity-50"
+          >
+            <NextIcon fontSize="small" />
+          </button>
+          <button
+            onClick={() => setPage(totalPages)}
+            disabled={page === totalPages}
+            className="p-2 border rounded disabled:opacity-50"
+          >
+            <LastPageIcon fontSize="small" />
+          </button>
+        </div> */}
       </div>
     </div>
   );
