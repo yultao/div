@@ -33,7 +33,7 @@ function convertDataToER(jsonObj: Record<string, any>): { type: string; nodes: A
     }
 
     function processEntity(entity: string, entityId: string, obj: Record<string, any>) {
-        const separateNodeForArray = true;
+        const separateNodeForArray = false;
         for (const [key, value] of Object.entries(obj)) {
             if (value === null || value === undefined) continue;
 
@@ -84,7 +84,7 @@ function convertDataToER(jsonObj: Record<string, any>): { type: string; nodes: A
                             target: `${childEntity}.${childId}.id`,
                             weight: "has"
                         });
-                        processEntity(`[${childEntity}]`, childId, item);
+                        processEntity(childEntity, childId, item);
                     }
                 });
             } else {
@@ -243,30 +243,9 @@ function App() {
   */
   const jsonData = JSON.stringify(convertDataToER(JSON.parse(json)))
   console.log(jsonData);
-  const jsonData2 = `
-  {
-        "type": "er",
-        "nodes": [
-          {"id":"ACCOUNTS.User.id","name":"id","type":"ID3","description":"ACCOUNTS"},
-          {"id":"ACCOUNTS.User.name","name":"name","type":"String","description":"ACCOUNTS"},
-          {"id":"ACCOUNTS.User.reviews","name":"reviews","type":"[Review]","description":"REVIEWS"},
-          {"id":"ACCOUNTS.User.username","name":"username","type":"String","description":"ACCOUNTS"},
-          {"id":"PRODUCTS.Product.inStock","name":"inStock","type":"Boolean","description":"INVENTORY"},
-          {"id":"PRODUCTS.Product.name","name":"name","type":"String","description":"PRODUCTS"},
-          {"id":"PRODUCTS.Product.price","name":"price","type":"Int","description":"PRODUCTS"},
-          {"id":"PRODUCTS.Product.reviews","name":"reviews","type":"[Review]","description":"REVIEWS"},
-          {"id":"PRODUCTS.Product.shippingEstimate","name":"shippingEstimate","type":"Int","description":"INVENTORY"},
-          {"id":"PRODUCTS.Product.upc","name":"upc","type":"String","description":"PRODUCTS"},
-          {"id":"PRODUCTS.Product.weight","name":"weight","type":"Int","description":"PRODUCTS"}
-        ],
-        "edges": [
-          { "source": "ACCOUNTS.User.reviews", "target": "REVIEWS.Review.id", "weight": "User.reviews" },
-          { "source": "PRODUCTS.Product.reviews", "target": "REVIEWS.Review.id", "weight": "Product.reviews" }
-        ]
-      }
-        `;
+  
   return (
-    <div style={{ width: "800px", border: "10px red solid" }} className="p-10">
+    <div style={{ width: "800px", height:"400px", border: "1px gray solid" }} className="p-10">
 
       <Graphite jsonString={jsonData} />
       <div className="flex justify-center items-start mt-10">
