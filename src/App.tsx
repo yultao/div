@@ -1,21 +1,8 @@
 import { useEffect, useState } from "react";
-import { DataGrid } from "@mui/x-data-grid";
-import type { GridColDef } from "@mui/x-data-grid";
 import { Graphite } from "graphite";
 import "./App.css"
 import "graphite/dist/graphite.css";
-import {
-  FirstPage as FirstPageIcon,
-  LastPage as LastPageIcon,
-  NavigateBefore as PrevIcon,
-  NavigateNext as NextIcon,
-} from "@mui/icons-material";
 
-type DataItem = {
-  id: number;
-  name?: string;
-  email?: string;
-};
 function convertDataToER(jsonObj: Record<string, any>): { type: string; nodes: Array<{ id: string; name: string; type: string; description: string }>; edges: Array<{ source: string; target: string; weight: string }> } {
     const result: {
         type: string;
@@ -33,7 +20,7 @@ function convertDataToER(jsonObj: Record<string, any>): { type: string; nodes: A
     }
 
     function processEntity(entity: string, entityId: string, obj: Record<string, any>) {
-        const separateNodeForArray = false;
+        const separateNodeForArray = true;
         for (const [key, value] of Object.entries(obj)) {
             if (value === null || value === undefined) continue;
 
@@ -51,7 +38,7 @@ function convertDataToER(jsonObj: Record<string, any>): { type: string; nodes: A
                         const childEntity = key.toUpperCase(); // e.g. addresses -> ADDRESS
                         const childId = item.id || `${childEntity}${idx + 1}`;
 
-                        makeNode(`[${childEntity}]`, entityId, childId, `[${childId}]`, "[{...}]");
+                        makeNode(`[${childEntity}]`, entityId, childId, `[${childId}]`, "[{...}]");//array item node
 
                         // PARENT -> ARRAY
                         if (!linkedToArray) {
@@ -120,56 +107,11 @@ function convertDataToER(jsonObj: Record<string, any>): { type: string; nodes: A
     return result;
 }
 function App() {
-  const [option1, setOption1] = useState("users");
-  const [option2, setOption2] = useState("all");
-
-  const [data, setData] = useState<DataItem[]>([]);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
-  const [total, setTotal] = useState(0);
-
-  const fetchData = async () => {
-    try {
-      //option 1 cors issue only happens when requesting from browser to another server in a different origin
-      //browser     ->      real server in another origin
-      //    (CORS issue)
-      //broswer     ->      vite server       ->          real server in another origin
-      //   (no cors issue same origin)  (no cors issue, becuase server to server)
-
-      const url = `/apiproxy/${option1}?_page=${page}&_limit=${pageSize}`;
-      const response = await fetch(url, {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer YOUR_TOKEN_HERE", // replace with real token
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const json = await response.json();
-      setData(json);
-
-      // Fake total since JSONPlaceholder doesn't return it in headers
-      setTotal(50);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
   useEffect(() => {
     // fetchData();
-  }, [page, option1, option2, pageSize]);
+  }, []);
 
-  const totalPages = Math.ceil(total / pageSize);
 
-  // Define columns for DataGrid
-  const columns: GridColDef[] = [
-    { field: "id", headerName: "ID", width: 90 },
-    { field: "name", headerName: "Name", width: 200, flex: 1 },
-    { field: "email", headerName: "Email", width: 250, flex: 1 },
-  ];
 
 
   const json = `
