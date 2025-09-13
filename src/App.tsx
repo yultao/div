@@ -3,19 +3,19 @@ import { Graphite } from "graphite";
 import "./App.css"
 import "graphite/dist/graphite.css";
 
-function convertDataToER(jsonObj: Record<string, any>): { type: string; nodes: Array<{ id: string; name: string; type: string; description: string }>; edges: Array<{ source: string; target: string; weight: string }> } {
+function convertJsonToGraph(jsonObj: Record<string, any>): { type: string; nodes: Array<{ id: string; name: string; type: string; value: string }>; edges: Array<{ source: string; target: string; label: string }> } {
     const result: {
         type: string;
-        nodes: Array<{ id: string; name: string; type: string; description: string }>;
-        edges: Array<{ source: string; target: string; weight: string }>;
+        nodes: Array<{ id: string; name: string; type: string; value: string }>;
+        edges: Array<{ source: string; target: string; label: string }>;
     } = { type: "er", nodes: [], edges: [] };
 
-    function makeNode(entity: string, entityId: string, key: string, type: string, description: string) {
+    function makeNode(entity: string, entityId: string, key: string, type: string, value: string) {
         result.nodes.push({
             id: `${entity}.${entityId}.${key}`,
             name: key,
             type,
-            description
+            value
         });
     }
 
@@ -45,7 +45,7 @@ function convertDataToER(jsonObj: Record<string, any>): { type: string; nodes: A
                             result.edges.push({
                                 source: `${entity}.${entityId}.${key}`,
                                 target: `[${childEntity}].${entityId}.${childId}`,
-                                weight: "has"
+                                label: "has"
                             });
                             linkedToArray = true;
                         }
@@ -62,14 +62,14 @@ function convertDataToER(jsonObj: Record<string, any>): { type: string; nodes: A
                         result.edges.push({
                             source: `[${childEntity}].${entityId}.${childId}`,
                             target: `${childEntity}.${childId}.id`,
-                            weight: "contains"
+                            label: "contains"
                         });
                         processEntity(childEntity, childId, item);
                     } else {
                         result.edges.push({
                             source: `${entity}.${entityId}.${key}`,
                             target: `${childEntity}.${childId}.id`,
-                            weight: "has"
+                            label: "has"
                         });
                         processEntity(childEntity, childId, item);
                     }
@@ -83,7 +83,7 @@ function convertDataToER(jsonObj: Record<string, any>): { type: string; nodes: A
                 result.edges.push({
                     source: `${entity}.${entityId}.${key}`,
                     target: `${childEntity}.${childId}.id`,
-                    weight: "has"
+                    label: "has"
                 });
                 processEntity(childEntity, childId, value);
             }
@@ -183,11 +183,11 @@ function App() {
   /*
   
   */
-  const jsonData = JSON.stringify(convertDataToER(JSON.parse(json)))
-  console.log(jsonData);
+  const jsonData = JSON.stringify(convertJsonToGraph(JSON.parse(json)))
+
   
   return (
-    <div style={{ width: "800px", height:"400px", border: "1px gray solid" }} className="p-10">
+    <div style={{ width: "90vw", height:"80vh", border: "1px gray solid" }} className="p-10">
 
       <Graphite jsonString={jsonData} />
       <div className="flex justify-center items-start mt-10">
