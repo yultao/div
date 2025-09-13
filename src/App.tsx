@@ -31,10 +31,10 @@ function convertJsonToGraph(jsonObj: Record<string, any>): Graph {
     edges: Array<{ source: string; target: string; label: string }>;
   } = { type: "er", nodes: [], edges: [] };
 
-  function makeNode(entity: string, entityId: string, key: string, type: string, value: string) {
+  function makeNode(entity: string, entityId: string, id: string, type: string, value: string) {
     result.nodes.push({
-      id: `${entity}.${entityId}.${key}`,
-      name: key,
+      id: `${entity}.${entityId}.${id}`,
+      name: id+"-n",
       type,
       value
     });
@@ -50,7 +50,8 @@ function convertJsonToGraph(jsonObj: Record<string, any>): Graph {
         makeNode(entity, entityId, key, typeof value, String(value));
       } else if (Array.isArray(value)) {
         // array of objects
-        makeNode(entity, entityId, key, `[${key}]`, "[{...}]");
+        const tp = key[0].toUpperCase() + key.slice(1);
+        makeNode(entity, entityId, tp, `[${tp}]`, "[{...}]");
 
         if (separateNodeForArray) {
           // create an edge from parent entity to the array field
@@ -64,7 +65,7 @@ function convertJsonToGraph(jsonObj: Record<string, any>): Graph {
             // PARENT -> ARRAY
             if (!linkedToArray) {
               result.edges.push({
-                source: `${entity}.${entityId}.${key}`,
+                source: `${entity}.${entityId}.${tp}`,
                 target: `[${childEntity}].${entityId}.${childId}`,
                 label: "has"
               });
@@ -95,18 +96,23 @@ function convertJsonToGraph(jsonObj: Record<string, any>): Graph {
             processEntity(childEntity, childId, item);
           }
         });
-      } else {
+      } else if(typeof value === "object") {
         // nested object
-        makeNode(entity, entityId, key, key[0].toUpperCase() + key.slice(1), "{...}");
+        const tp = key[0].toUpperCase() + key.slice(1);
+        makeNode(entity, entityId, key, tp, "{...}");
 
         const childEntity = key.toUpperCase();
-        const childId = value.id || `${childEntity}001`;
+        const childId = value.id || `${tp}Id`;//  if no id
         result.edges.push({
           source: `${entity}.${entityId}.${key}`,
           target: `${childEntity}.${childId}.id`,
           label: "has"
         });
         processEntity(childEntity, childId, value);
+      } else {
+        // unknown type, skip
+        console.warn("Unknown type for key:", key, value);
+        alert("Unknown type for key: " + key);
       }
     }
   }
@@ -128,10 +134,9 @@ function convertJsonToGraph(jsonObj: Record<string, any>): Graph {
   return result;
 }
 
-const initialJson = `
-{
+const initialJson = `{
   "user": {
-    "id": "USR001",
+    "id": "USRabc",
     "addresses": [
       {
         "type": "home",
@@ -199,7 +204,7 @@ function App() {
   const [graphJson, setGraphJson] = useState(() =>
     JSON.stringify(convertJsonToGraph(JSON.parse(initialJson)))
   );
-  const [dividerX, setDividerX] = useState(50); // left panel width in %
+  const [dividerX, setDividerX] = useState(40); // left panel width in %
   const [isDragging, setIsDragging] = useState(false);
 
 
@@ -236,7 +241,7 @@ function App() {
     };
   }, [isDragging]);
   return (
-    <div style={{ display: "flex", height: "90vh" }} >
+    <div style={{ display: "flex", height: "90vh", width:"94vw"}} >
 
 
       {/* Right panel: JSON editor */}
