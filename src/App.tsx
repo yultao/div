@@ -2,119 +2,133 @@ import { useEffect, useState } from "react";
 import { Graphite } from "graphite";
 import "./App.css"
 import "graphite/dist/graphite.css";
+import Editor from "@monaco-editor/react";
 
-function convertJsonToGraph(jsonObj: Record<string, any>): { type: string; nodes: Array<{ id: string; name: string; type: string; value: string }>; edges: Array<{ source: string; target: string; label: string }> } {
-    const result: {
-        type: string;
-        nodes: Array<{ id: string; name: string; type: string; value: string }>;
-        edges: Array<{ source: string; target: string; label: string }>;
-    } = { type: "er", nodes: [], edges: [] };
 
-    function makeNode(entity: string, entityId: string, key: string, type: string, value: string) {
-        result.nodes.push({
-            id: `${entity}.${entityId}.${key}`,
-            name: key,
-            type,
-            value
-        });
-    }
-
-    function processEntity(entity: string, entityId: string, obj: Record<string, any>) {
-        const separateNodeForArray = true;
-        for (const [key, value] of Object.entries(obj)) {
-            if (value === null || value === undefined) continue;
-
-            if (typeof value !== "object" || (Array.isArray(value) === false && typeof value !== "object")) {
-                // primitive field
-                makeNode(entity, entityId, key, typeof value, String(value));
-            } else if (Array.isArray(value)) {
-                // array of objects
-                makeNode(entity, entityId, key, `[${key}]`, "[{...}]");
-
-                if (separateNodeForArray) {
-                    // create an edge from parent entity to the array field
-                    let linkedToArray = false;
-                    value.forEach((item, idx) => {
-                        const childEntity = key.toUpperCase(); // e.g. addresses -> ADDRESS
-                        const childId = item.id || `${childEntity}${idx + 1}`;
-
-                        makeNode(`[${childEntity}]`, entityId, childId, `[${childId}]`, "[{...}]");//array item node
-
-                        // PARENT -> ARRAY
-                        if (!linkedToArray) {
-                            result.edges.push({
-                                source: `${entity}.${entityId}.${key}`,
-                                target: `[${childEntity}].${entityId}.${childId}`,
-                                label: "has"
-                            });
-                            linkedToArray = true;
-                        }
-                    });
-                }
-
-                // each item in the array is a separate entity
-                value.forEach((item, idx) => {
-                    const childEntity = key.toUpperCase(); // e.g. addresses -> ADDRESS
-                    const childId = item.id || `${childEntity}${idx + 1}`;
-
-                    if (separateNodeForArray) {
-                        // ARRAY -> ITEM
-                        result.edges.push({
-                            source: `[${childEntity}].${entityId}.${childId}`,
-                            target: `${childEntity}.${childId}.id`,
-                            label: "contains"
-                        });
-                        processEntity(childEntity, childId, item);
-                    } else {
-                        result.edges.push({
-                            source: `${entity}.${entityId}.${key}`,
-                            target: `${childEntity}.${childId}.id`,
-                            label: "has"
-                        });
-                        processEntity(childEntity, childId, item);
-                    }
-                });
-            } else {
-                // nested object
-                makeNode(entity, entityId, key, key[0].toUpperCase() + key.slice(1), "{...}");
-
-                const childEntity = key.toUpperCase();
-                const childId = value.id || `${childEntity}001`;
-                result.edges.push({
-                    source: `${entity}.${entityId}.${key}`,
-                    target: `${childEntity}.${childId}.id`,
-                    label: "has"
-                });
-                processEntity(childEntity, childId, value);
-            }
-        }
-    }
-
-    // entry point: assume root objects are entities
-    for (const [rootKey, rootVal] of Object.entries(jsonObj)) {
-        const entity = rootKey.toUpperCase().replace(/s$/, ""); // plural -> singular
-        if (Array.isArray(rootVal)) {
-            rootVal.forEach((item, idx) => {
-                const entityId = item.id || `${entity}${idx + 1}`;
-                processEntity(entity, entityId, item);
-            });
-        } else if (typeof rootVal === "object") {
-            const entityId = rootVal.id || `${entity}001`;
-            processEntity(entity, entityId, rootVal);
-        }
-    }
-
-    return result;
+interface GraphNode {
+  id: string;
+  name: string;
+  type: string;
+  value: string;
 }
-function App() {
-  useEffect(() => {
-    // fetchData();
-  }, []);
 
+interface GraphEdge {
+  source: string;
+  target: string;
+  label: string;
+}
 
+interface Graph {
+  type: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
 
+function convertJsonToGraph(jsonObj: Record<string, any>): Graph {
+  const result: {
+    type: string;
+    nodes: Array<{ id: string; name: string; type: string; value: string }>;
+    edges: Array<{ source: string; target: string; label: string }>;
+  } = { type: "er", nodes: [], edges: [] };
 
-  const json = `
+  function makeNode(entity: string, entityId: string, key: string, type: string, value: string) {
+    result.nodes.push({
+      id: `${entity}.${entityId}.${key}`,
+      name: key,
+      type,
+      value
+    });
+  }
+
+  function processEntity(entity: string, entityId: string, obj: Record<string, any>) {
+    const separateNodeForArray = true;
+    for (const [key, value] of Object.entries(obj)) {
+      if (value === null || value === undefined) continue;
+
+      if (typeof value !== "object" || (Array.isArray(value) === false && typeof value !== "object")) {
+        // primitive field
+        makeNode(entity, entityId, key, typeof value, String(value));
+      } else if (Array.isArray(value)) {
+        // array of objects
+        makeNode(entity, entityId, key, `[${key}]`, "[{...}]");
+
+        if (separateNodeForArray) {
+          // create an edge from parent entity to the array field
+          let linkedToArray = false;
+          value.forEach((item, idx) => {
+            const childEntity = key.toUpperCase(); // e.g. addresses -> ADDRESS
+            const childId = item.id || `${childEntity}${idx + 1}`;
+
+            makeNode(`[${childEntity}]`, entityId, childId, `[${childId}]`, "[{...}]");//array item node
+
+            // PARENT -> ARRAY
+            if (!linkedToArray) {
+              result.edges.push({
+                source: `${entity}.${entityId}.${key}`,
+                target: `[${childEntity}].${entityId}.${childId}`,
+                label: "has"
+              });
+              linkedToArray = true;
+            }
+          });
+        }
+
+        // each item in the array is a separate entity
+        value.forEach((item, idx) => {
+          const childEntity = key.toUpperCase(); // e.g. addresses -> ADDRESS
+          const childId = item.id || `${childEntity}${idx + 1}`;
+
+          if (separateNodeForArray) {
+            // ARRAY -> ITEM
+            result.edges.push({
+              source: `[${childEntity}].${entityId}.${childId}`,
+              target: `${childEntity}.${childId}.id`,
+              label: "contains"
+            });
+            processEntity(childEntity, childId, item);
+          } else {
+            result.edges.push({
+              source: `${entity}.${entityId}.${key}`,
+              target: `${childEntity}.${childId}.id`,
+              label: "has"
+            });
+            processEntity(childEntity, childId, item);
+          }
+        });
+      } else {
+        // nested object
+        makeNode(entity, entityId, key, key[0].toUpperCase() + key.slice(1), "{...}");
+
+        const childEntity = key.toUpperCase();
+        const childId = value.id || `${childEntity}001`;
+        result.edges.push({
+          source: `${entity}.${entityId}.${key}`,
+          target: `${childEntity}.${childId}.id`,
+          label: "has"
+        });
+        processEntity(childEntity, childId, value);
+      }
+    }
+  }
+
+  // entry point: assume root objects are entities
+  for (const [rootKey, rootVal] of Object.entries(jsonObj)) {
+    const entity = rootKey.toUpperCase().replace(/s$/, ""); // plural -> singular
+    if (Array.isArray(rootVal)) {
+      rootVal.forEach((item, idx) => {
+        const entityId = item.id || `${entity}${idx + 1}`;
+        processEntity(entity, entityId, item);
+      });
+    } else if (typeof rootVal === "object") {
+      const entityId = rootVal.id || `${entity}001`;
+      processEntity(entity, entityId, rootVal);
+    }
+  }
+
+  return result;
+}
+
+const initialJson = `
 {
   "user": {
     "id": "USR001",
@@ -180,100 +194,69 @@ function App() {
   }
 }
 `;
-  /*
-  
-  */
-  const jsonData = JSON.stringify(convertJsonToGraph(JSON.parse(json)))
+function App() {
+  const [rawJson, setRawJson] = useState(initialJson); // rawJson as state
+  const [graphJson, setGraphJson] = useState(() =>
+    JSON.stringify(convertJsonToGraph(JSON.parse(initialJson)))
+  );
+  const [dividerX, setDividerX] = useState(50); // left panel width in %
+  const [isDragging, setIsDragging] = useState(false);
 
-  
+
+  const handleMouseDown = () => setIsDragging(true);
+  const handleMouseUp = () => setIsDragging(false);
+  const handleMouseMove = (e: MouseEvent) => {
+    if (isDragging) {
+      const newDivider = (e.clientX / window.innerWidth) * 100;
+      if (newDivider > 10 && newDivider < 90) {
+        setDividerX(newDivider);
+      }
+    }
+  };
+  // handle JSON editor changes
+  const handleEditorChange = (value: string | undefined) => {
+    if (!value) return;
+    setRawJson(value);
+
+    // try updating graph only if JSON is valid
+    try {
+      const parsed = JSON.parse(value);
+      const updatedGraph = convertJsonToGraph(parsed);
+      setGraphJson(JSON.stringify(updatedGraph));
+    } catch (err) {
+      // invalid JSON, ignore for now
+    }
+  };
+  useEffect(() => {
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("pointerup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("pointerup", handleMouseUp);
+    };
+  }, [isDragging]);
   return (
-    <div style={{ width: "90vw", height:"80vh", border: "1px gray solid" }} className="p-10">
+    <div style={{ display: "flex", height: "90vh" }} >
 
-      <Graphite jsonString={jsonData} />
-      <div className="flex justify-center items-start mt-10">
-        {/* Header */}
-        {/* <div className="flex items-center gap-4">
-        <select
-          value={option1}
-          onChange={(e) => setOption1(e.target.value)}
-          className="border rounded px-3 py-2"
-        >
-          <option value="users">Users</option>
-          <option value="posts">Posts</option>
-          <option value="comments">Comments</option>
-        </select>
 
-        <select
-          value={option2}
-          onChange={(e) => setOption2(e.target.value)}
-          className="border rounded px-3 py-2"
-        >
-          <option value="all">All</option>
-          <option value="active">Active</option>
-          <option value="archived">Archived</option>
-        </select>
-
-        <button
-          onClick={fetchData}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-        >
-          Fetch Data
-        </button>
-      </div> */}
-
-        {/* DataGrid */}
-        {/* <div style={{ height: 400, width: "100%" }}>
-          <DataGrid
-            rows={data}
-            columns={columns}
-            rowCount={total}
-            page={page - 1} // DataGrid uses 0-based pages
-            pageSize={pageSize}
-            paginationMode="server"
-            onPageChange={(newPage: number) => setPage(newPage + 1)}
-            onPageSizeChange={(newSize: number) => {
-              setPageSize(newSize);
-              setPage(1);
-            }}
-            rowsPerPageOptions={[5, 10, 20]}
-            pagination
-          />
-        </div> */}
-
-        {/* Custom pagination controls (optional) */}
-        {/* <div className="flex items-center gap-2 mt-2">
-          <button
-            onClick={() => setPage(1)}
-            disabled={page === 1}
-            className="p-2 border rounded disabled:opacity-50"
-          >
-            <FirstPageIcon fontSize="small" />
-          </button>
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="p-2 border rounded disabled:opacity-50"
-          >
-            <PrevIcon fontSize="small" />
-          </button>
-          <span className="px-3">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="p-2 border rounded disabled:opacity-50"
-          >
-            <NextIcon fontSize="small" />
-          </button>
-          <button
-            onClick={() => setPage(totalPages)}
-            disabled={page === totalPages}
-            className="p-2 border rounded disabled:opacity-50"
-          >
-            <LastPageIcon fontSize="small" />
-          </button>
-        </div> */}
+      {/* Right panel: JSON editor */}
+      <div style={{ border: "1px solid #ccc", width: `${dividerX}%` }}>
+        <Editor
+          height="100%"
+          defaultLanguage="json"
+          value={rawJson}
+          onChange={handleEditorChange}
+          options={{ minimap: { enabled: false } }}
+        />
+      </div>
+      {/* Divider */}
+      <div
+        onPointerDown={handleMouseDown}
+        style={{ width: "8px", cursor: "col-resize", backgroundColor: "#f0f0f0" }}
+      />
+      {/* Left panel: Graph */}
+      <div style={{ border: "1px solid #ccc", width: `${100 - dividerX}%` }}>
+        <Graphite jsonString={graphJson} />
       </div>
     </div>
   );
